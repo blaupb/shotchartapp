@@ -29,7 +29,7 @@ ui <- dashboardPage(
   # create sidebar
   dashboardSidebar(
     sidebarMenu(
-      menuItem('Player Shot Attempts', tabName = 'player_shots', icon = icon('basketball-ball'))
+      menuItem('Player Shot Charts', tabName = 'player_shots', icon = icon('basketball-ball'))
     ),
     
     # team input
