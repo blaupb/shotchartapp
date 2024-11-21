@@ -1,4 +1,4 @@
 # shotchartapp
-NBA player analysis application created with R Shiny, 1997-2025
+NBA player analysis application created with R Shiny, 1997-2025 seasons
 
 This app within Shiny allows the user to analyze shot charts and box scores of NBA players over the 1997-2025 seasons. To create this app, I utilized the [nbastatR](https://www.rdocumentation.org/packages/nbastatR/versions/0.1.12020301) package to get shot tracking and box score data, various functions and ggplot objects derived and manipulated from an R [tutorial](https://github.com/DomSamangy/R_Tutorials/blob/main/1_Shot_Chart_Tutorial.Rmd), and plotly to allow for interactive data points for each shot chart. I also added summary statistics below each shot chart organized by type of shot attempted and two/three-point field goal attempted. I apologize in advance if the app takes a while to load. I hope you enjoy this work - feel free to use this code as you wish, and let me know your thoughts!
