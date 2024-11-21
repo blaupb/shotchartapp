@@ -1,21 +1,16 @@
 # install/load libraries
-# install.packages('shiny')
 library(shiny)
-# install.packages('shinydashboard')
 library(shinydashboard)
-# install.packages('tidyverse')
 library(tidyverse)
-# install.packages('nbastatR')
+# devtools::install_github("abresler/nbastatR")
 library(nbastatR)
-# install.packages('ggthemes')
 library(ggthemes)
-# install.packages('plotly')
 library(plotly)
 
 # load data
 load('shotdata.RData')
 
-# RUN TO MAKE APP WORK
+# run to make app work
 Sys.setenv('VROOM_CONNECTION_SIZE' = 131072 * 2)
 
 # Set up the dashboard UI
@@ -24,25 +19,26 @@ ui <- dashboardPage(
   skin = 'black',
   
   # title
-  dashboardHeader(title = 'NBA Shot Analysis App'),
+  dashboardHeader(title = 'NBA Player Analysis'),
   
   # create sidebar
   dashboardSidebar(
     sidebarMenu(
-      menuItem('Player Shot Charts', tabName = 'player_shots', icon = icon('basketball-ball'))
+      menuItem('Shot Charts', tabName = 'player_shots', icon = icon('basketball-ball')),
+      menuItem('Box Scores', tabName = 'box_score', icon = icon('percent'))
     ),
     
     # team input
     selectInput(
       inputId = 'team_pick',
-      label = 'Select Team',
+      label = 'Team',
       choices = nba_teams$nameTeam
     ),
     
     # season input
     selectInput(
       inputId = 'szn',
-      label = 'Select Season',
+      label = 'Season',
       choices = 1997:2025,
       selected = 2025
     ),
@@ -57,14 +53,19 @@ ui <- dashboardPage(
   # dashboard body --> plot output
   dashboardBody(
     tabItems(
-      # plotly output; interactive graph
+      # plotly output; interactive graph, tables
       tabItem(tabName = 'player_shots', 
               plotlyOutput('shot_chart'), 
               tableOutput('summary'),
-              tableOutput('summary2'))
-      )
+              tableOutput('summary2')),
+      
+      # box scores
+      tabItem(tabName = 'box_score',
+              tableOutput('box_stats'),
+              tableOutput('averages'))
     )
   )
+)
 
 
 # server logic
@@ -83,7 +84,7 @@ server <- function(input, output) {
     # player input
     selectInput(
       inputId = 'player',
-      label = 'Select Player',
+      label = 'Player',
       choices = names$namePlayer
     )
   })
@@ -110,7 +111,7 @@ server <- function(input, output) {
       actionButton('submit', 'Submit')
     )
     
-
+    
   })
   
   # plotly object of shot chart
@@ -264,6 +265,137 @@ server <- function(input, output) {
     sum_2_final
     
   })
+  
+  # box scores
+  output$box_stats <- renderTable({
+    
+    # data pulling to get game ids for box_scores function
+    tm_shots <- teams_shots(teams = as.character(input$team_pick), 
+                            seasons = as.numeric(input$szn)) %>%
+      mutate(dateGame = ymd(dateGame)) %>%
+      filter(dateGame >= as.Date(input$date[1]) &
+               dateGame <= as.Date(input$date[2])) %>%
+      arrange(desc(dateGame))
+    
+    # vector of game ids
+    games <- unique(tm_shots$idGame)
+    
+    # retrieve box scores
+    box_score <- box_scores(game_ids = games, 
+                            box_score_types = 'Traditional',
+                            result_types = 'player')
+    
+    # retrieve table
+    stats <- box_score$dataBoxScore[[1]]
+    
+    # data table to create game column (for box scores table)
+    games <- stats %>%
+      group_by(idGame) %>%
+      select(idGame, slugTeam) %>%
+      unique()
+    
+    # create game column using summarize, collapse by grouped idGame
+    games_df <- games %>%
+      group_by(idGame) %>%
+      summarise(game = paste(slugTeam, collapse = ' vs ')) %>%
+      dplyr::ungroup()
+    
+    # left join with stats, game column by idGame
+    stats <- stats %>%
+      left_join(games_df, by = 'idGame')
+    
+    # filter for player
+    final_stats <- stats %>%
+      filter(namePlayer == as.character(input$player))
+    
+    # data mutation, manipulation needed for final box score table
+    final_stats <- final_stats %>%
+      select(game, minExact, fgm, fga, fg3m, fg3a, ftm, fta, treb, ast, stl, blk, tov, pf, pts) %>%
+      mutate(minExact = as.integer(round(minExact, 0)),
+             fgm = as.integer(fgm),
+             fga = as.integer(fga),
+             fg3m = as.integer(fg3m),
+             fg3a = as.integer(fg3a),
+             ftm = as.integer(ftm),
+             fta = as.integer(fta),
+             treb = as.integer(treb),
+             ast = as.integer(ast),
+             stl = as.integer(stl),
+             blk = as.integer(blk),
+             tov = as.integer(tov),
+             pf = as.integer(pf),
+             pts = as.integer(pts))
+    
+    # change names of columns for context purposes
+    names(final_stats) = c('Game', 'Minutes', 'FG Made', 'FG Att', '3pt Made', '3pt Att', 'FT Made',
+                           'FT Att', 'Rebounds', 'Assists', 'Steals', 'Blocks', 'Turnovers',
+                           'Fouls', 'Points')
+    
+    # showcase table
+    final_stats
+    
+  })
+  
+  # averages
+  output$averages <- renderTable({
+    
+    # data pulling to get game ids for box_scores function
+    tm_shots <- teams_shots(teams = as.character(input$team_pick), 
+                            seasons = as.numeric(input$szn)) %>%
+      mutate(dateGame = ymd(dateGame)) %>%
+      filter(dateGame >= as.Date(input$date[1]) &
+               dateGame <= as.Date(input$date[2])) %>%
+      arrange(desc(dateGame))
+    
+    # vector of game ids
+    games <- unique(tm_shots$idGame)
+    
+    # retrieve box scores
+    box_score <- box_scores(game_ids = games, 
+                            box_score_types = 'Traditional',
+                            result_types = 'player')
+    
+    # retrieve table
+    stats <- box_score$dataBoxScore[[1]]
+    
+    # filter for player selected
+    final_stats <- stats %>%
+      filter(namePlayer == as.character(input$player))
+    
+    # get stats of interest for averages
+    final_stats <- final_stats %>%
+      select(minExact, fgm, fga, fg3m, fg3a, ftm, fta, treb, ast, stl, blk, tov, pf, pts)
+    
+    # manipulation needed for stat averages
+    avgs <- final_stats %>%
+      summarize(mpg = mean(minExact),
+                ppg = mean(pts),
+                rpg = mean(treb),
+                apg = mean(ast),
+                spg = mean(stl),
+                bpg = mean(blk),
+                tpg = mean(tov),
+                fgpct = sum(fgm)/sum(fga),
+                fg3pct = sum(fg3m)/sum(fg3a)) %>%
+      mutate(mpg = round(mpg, 1),
+             ppg = round(ppg, 1),
+             rpg = round(rpg, 1),
+             apg = round(apg, 1),
+             spg = round(spg, 1),
+             bpg = round(bpg, 1),
+             tpg = round(tpg, 1),
+             fgpct = paste0(round(fgpct*100, 1), '%'),
+             fg3pct = paste0(round(fg3pct*100, 1), '%'))
+    
+    # change names for context
+    names(avgs) = c('Minutes', 'Points', 'Rebounds', 'Assists', 'Steals', 'Blocks',
+                    'Turnovers', 'FG%', '3Pt%')
+    
+    # showcase final table
+    avgs
+    
+  })
+  
 }
 
 # app
